@@ -1,0 +1,53 @@
+---
+title: "rna_count_survey_questions.Rmd"
+author: "dshayler"
+date: "11/12/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# load libraries
+
+```{r label, options}
+library(tidyverse)
+library(seuratTools)
+```
+
+```{r label, options}
+# proj_dir <- "~/single_cell_projects/sc_cone_devel/sc_cone_devel_H_sapiens/20170407-DS-FACS-Hs_20170407-DS-C1-Hs_20171031-DS-FACS-Hs_20181001-DS-fetalonly-Hs_20190501-DS-FACS-Hs_20190501-SHL-fresh-FACS-Hs_20151130-HS-C1-Hs_proj"
+# 
+# seu <- load_seurat_from_proj(proj_dir = proj_dir, prefix = "remove_lowrc_nonPRs_and_actD_treated_cells")
+
+seu_object <-  readRDS("~/single_cell_projects/sc_cone_devel/sc_cone_devel_organoid/20181001-DS-organoid-Hs_proj/output/seurat/remove_lowrc_and_nonPRs_cells_seu.rds")
+```
+
+#  mean reads per cell
+
+```{r label, options}
+counts_per_cell <- mean(seu_object$gene@meta.data$nCount_RNA)
+print(counts_per_cell)
+```
+
+# mean unique transcripts and genes
+
+```{r label, options}
+unique_genes <- GetAssayData(object = seu_object$gene[["RNA"]], slot = "data") %>% 
+  tibble::as_tibble() %>% 
+  purrr::map_dbl(~sum(.x > 0)) %>% 
+  mean() %>% 
+  # range() %>% 
+  identity()
+
+unique_transcripts <- GetAssayData(object = seu_object$transcript[["RNA"]], slot = "data") %>% 
+  tibble::as_tibble() %>% 
+  purrr::map_dbl(~sum(.x > 0)) %>%
+  mean() %>% 
+  # range() %>% 
+  identity()
+
+print(unique_genes)
+print(unique_transcripts)
+```
