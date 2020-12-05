@@ -1,0 +1,70 @@
+---
+title: "111520_GeneTransc_violinPlot"
+author: "dshayler"
+date: "11/15/2020"
+output: html_document
+---
+```{r}
+library(tidyverse)
+library(seuratTools)
+library(scales)
+```
+
+#read in seurat object 
+```{r}
+Seu <- readRDS("~/single_cell_projects/integrated_projects/7-seq_050120/output/seurat/Final_dataset_duplicate_070320.rds")
+```
+
+#0.4 res cell group order
+```{r}
+group_order <- c("RPC/MG", "PRP", "LM", "S", "ER", "LR")
+mypal <- c("RPC/MG"="#B385FF", "PRP"="#00BA38", "LM"="#F8766D", "S"="#F564E3","ER"="#B79F00", "LR"="#619CFF")
+
+```
+
+#need: table with Cell ID, group ID, counts for transcript of choice. input a transcript ID, get counts for all cells and group ID
+```{r}
+
+cellCounts<- function(seu, transcriptID){
+  countlist<-as.data.frame(seu@assays$integrated@scale.data[transcriptID,])
+  countlist<-tibble::rownames_to_column(countlist)
+  colnames(countlist)<-c("cellID","Read Count")
+
+  met<-as.data.frame(seu$Abbrev_Groups)
+  met<-tibble::rownames_to_column(met)
+  colnames(met)<-c("cellID","Cell Group")
+  countlist<-left_join(countlist,met, by="cellID")
+}
+  
+```
+
+#run table for ensembl ID table
+```{r}
+test<-cellCounts(Seu$transcript, "ENST00000397002")  
+
+```
+
+#violin plot
+```{r}
+groups<-factor(test$`Cell Group`, levels=group_order)
+counts<-test$`Read Count`
+vln_plot <- ggplot(test, aes(x=groups, y=counts, fill=groups)) +
+  geom_violin(trim=FALSE)+
+  ylim(0,4.5)+
+  scale_fill_manual(values=mypal)+
+  scale_y_continuous(labels=comma)+
+  geom_boxplot(width=0.2)+
+  ylim(0,4.5)+
+   theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(
+        size=18),
+        axis.title.y = element_blank(),
+        axis.text.y = element_text(
+          size=18),legend.position = "none")
+
+vln_plot
+```
+#export plot
+```{r}
+ggsave("~/Plot_outputs/111720_7seq-transc_ENST00000397002_violin.pdf",vln_plot,width=10, height=7, units = "in" )
+```

@@ -1,0 +1,218 @@
+---
+title: "plot complexheatmap"
+author: "dshayler"
+date: "10/7/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#library
+```{r}
+library(tidyverse)
+library(seuratTools)
+```
+
+#heatmap Function
+```{r}
+seu_complex_heatmap <- function(seu, features = NULL, cells = NULL, group.by = "ident",
+                                slot = "scale.data", assay = NULL, group.bar.height = 0.01,
+                                cluster_columns = FALSE, column_split = NULL, col_dendrogram = "ward.D2",
+                                col_palette = NULL, mm_col_dend = 30, ...) {
+  # browser()
+
+  # drop levels from legend that are not in the seurat object
+  seu@meta.data[[group.by]] <- forcats::fct_drop(seu@meta.data[[group.by]])
+
+  cells <- cells %||% colnames(x = seu)
+  if (is.numeric(x = cells)) {
+    cells <- colnames(x = seu)[cells]
+  }
+  assay <- assay %||% Seurat::DefaultAssay(object = seu)
+  Seurat::DefaultAssay(object = seu) <- assay
+  features <- features %||% VariableFeatures(object = seu)
+  features <- rev(x = unique(x = features))
+  possible.features <- rownames(x = GetAssayData(
+    object = seu,
+    slot = slot
+  ))
+  if (any(!features %in% possible.features)) {
+    bad.features <- features[!features %in% possible.features]
+    features <- features[features %in% possible.features]
+    if (length(x = features) == 0) {
+      stop(
+        "No requested features found in the ", slot,
+        " slot for the ", assay, " assay."
+      )
+    }
+    warning(
+      "The following features were omitted as they were not found in the ",
+      slot, " slot for the ", assay, " assay: ", paste(bad.features,
+        collapse = ", "
+      )
+    )
+  }
+  data <- as.data.frame(x = t(x = as.matrix(x = GetAssayData(
+    object = seu,
+    slot = slot
+  )[features, cells, drop = FALSE])))
+  seu <- suppressMessages(expr = StashIdent(
+    object = seu,
+    save.name = "ident"
+  ))
+
+  if (col_dendrogram %in% c(
+    "ward.D", "single", "complete", "average", "mcquitty",
+    "median", "centroid", "ward.D2"
+  )) {
+    cluster_columns <-
+      Seurat::Embeddings(seu, "pca") %>%
+      dist() %>%
+      hclust(col_dendrogram)
+  } else {
+    ordered_meta <- seu[[col_dendrogram]][order(seu[[col_dendrogram]]), , drop = FALSE]
+    column_split <- ordered_meta[, 1]
+    cells <- rownames(ordered_meta)
+    data <- data[cells, ]
+    # browser()
+    group.by <- union(group.by, col_dendrogram)
+  }
+
+  group.by <- group.by %||% "ident"
+  groups.use <- seu[[group.by]][cells, , drop = FALSE]
+
+  groups.use <- groups.use %>%
+    tibble::rownames_to_column("sample_id") %>%
+    dplyr::mutate(across(where(is.character), as.factor)) %>%
+    data.frame(row.names = 1) %>%
+    identity()
+
+  # factor colors
+  groups.use.factor <- groups.use[sapply(groups.use, is.factor)]
+  ha_cols.factor <- NULL
+  if (length(groups.use.factor) > 0) {
+    ha_col_names.factor <- lapply(groups.use.factor, levels)
+
+    if (is.null(col_palette)) {
+      ha_cols.factor <- purrr::map(ha_col_names.factor, ~ scales::hue_pal()(length(.x))) %>%
+        purrr::map2(ha_col_names.factor, set_names)
+    } else {
+      ha_cols.factor <- purrr::map(ha_col_names.factor, ~ col_palette[1:length(.x)]) %>%
+        purrr::map2(ha_col_names.factor, set_names)
+    }
+  }
+
+  # numeric colors
+  groups.use.numeric <- groups.use[sapply(groups.use, is.numeric)]
+  ha_cols.numeric <- NULL
+  if (length(groups.use.numeric) > 0) {
+    numeric_col_fun <- function(myvec, color) {
+      circlize::colorRamp2(range(myvec), c("white", color))
+    }
+
+    ha_col_names.numeric <- names(groups.use.numeric)
+    ha_col_hues.numeric <- scales::hue_pal()(length(ha_col_names.numeric))
+
+    ha_cols.numeric <- purrr::map2(groups.use[ha_col_names.numeric], ha_col_hues.numeric, numeric_col_fun)
+  }
+
+  ha_cols <- c(ha_cols.factor, ha_cols.numeric)
+
+  column_ha <- ComplexHeatmap::HeatmapAnnotation(df = groups.use, height = unit(group.bar.height, "points"), col = ha_cols)
+
+  hm <- ComplexHeatmap::Heatmap(t(data),
+    name = "log expression", top_annotation = column_ha,
+    cluster_columns = cluster_columns,
+    show_column_names = FALSE,
+    column_dend_height = unit(mm_col_dend, "mm"),
+    column_split = column_split,
+    column_title = NULL,
+    ...
+  )
+
+  return(hm)
+}
+```
+
+#input seurat object
+
+```{r}
+Seu <- readRDS("~/single_cell_projects/integrated_projects/7-seq_050120/output/seurat/Final_dataset_duplicate_070320.rds")
+```
+
+#subsetting seurat object before plotting for specific cells
+```{r}
+toremove <- read.csv("/home/dshayler/src/112520_RPC_localized_cellGrp_forHeatmap.csv")
+cell_list <- toremove[, 1]
+
+seu_subset <- map(Seu, subset, cells = cell_list)
+```
+
+
+```{r}
+
+cell_cycle_genes <- c("CCND1", "SLC1A3", "CCNB2", "CCNA2", "CCNE1")
+genetargets<-c("NRL","NR2E3","GNAT1","GNAT2","THRB")
+group_order <- c(
+  "RPC", "MG", "PRP", "LM1", "LM2", "LM3", "LM4", "S", "RT",
+  "ER", "LR"
+)
+
+seu_subset$gene$group_names_1.6 <- factor(Seu$gene$group_names_1.6, levels = group_order)
+
+mycols <- c("#00A6FF", "chocolate", "#AEA200", "#DB8E00", "#64B200", "firebrick2", "#00BADE", "#FF63B6", "#B385FF", "#F8766D", "#00C1A7")
+
+clustCol <- c( "#00A6FF"="RPC", "chocolate"="MG","#AEA200"="PRP", "#DB8E00"="LM1", "#64B200"="LM2", "firebrick2"="LM3", "#00BADE"="LM4", "#FF63B6"="S", "#B385FF"="RT",
+  "#F8766D"="ER", "#00C1A7"="LR")
+
+test<- names(subset(clustCol, clustCol %in% levels(factor(seu_subset$gene$group_names_1.6))))
+
+  
+
+scales::show_col(mycols)
+```
+
+# heatmap cluster columns with ward clustering, custom colors and selected cells
+
+```{r}
+
+seu_complex_heatmap(seu_subset$gene,
+  features = cell_cycle_genes, group.by = "group_names_1.6",
+  slot = "scale.data", assay = "integrated", group.bar.height = 0.01,
+  cluster_columns = FALSE, column_split = NULL, col_dendrogram = "ward.D2", mm_col_dend = 30, col_palette = mycols
+)
+```
+
+# split columns by metadata
+
+```{r}
+
+myplot <- seu_complex_heatmap(seu_subset$gene,
+  features = genetargets, cells = NULL, group.by = "group_names_1.6",
+  slot = "data", assay = "RNA", group.bar.height = 0.01,
+  cluster_columns = FALSE, column_split = NULL, col_dendrogram = "group_names_1.6", col_palette = test, mm_col_dend = 30
+)
+myplot
+```
+
+#save plot
+
+```{r, eval = TRUE}
+pdf("/home/dshayler/Plot_outputs/112720_Heatmap_RPCLocalizedRodConeMark_1-6res.pdf")
+myplot
+dev.off()
+```
+
+
+
+# split columns by metadata and cluster each split
+
+```{r}
+
+seu_complex_heatmap(seu_subset$gene,
+  features = cell_cycle_genes, cells = NULL, group.by = "group_names_1.6",
+  slot = "scale.data", assay = "integrated", group.bar.height = 0.01,
+  cluster_columns = TRUE, column_split = NULL, col_dendrogram = "group_names_1.6", mm_col_dend = 30, col_palette = mycols
+)
+```

@@ -1,0 +1,60 @@
+---
+title: "Untitled"
+author: "dshayler"
+date: "9/15/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(fs)
+
+```
+#input transcript datatable
+```{r}
+df=read_csv("../src/112320_7seq_RXRG_isoformExpr_0-4res.csv", col_names = TRUE) %>% 
+  mutate(group.by = as.factor(group.by))
+
+```
+
+#produce bar plot from input from shiny app
+```{r}
+#reorder by desired cluster order
+
+group.by= df$group.by
+group_order <- c("RPC/MG", "PRP", "LM", "S", "ER", "LR")
+df$group.by <- factor(group.by, levels = group_order)
+#group.by=as.character(group.by)
+#group.by <- factor(group.by, levels=c("4","1","5","0","2","3"))
+
+#celltype_labels <- c(`RPC/MG` = "3", `PR/EC` = "2", LM = "0", S = "5", ER = "1", LR = "4")
+#df$labels <- forcats::fct_recode(group.by, !!!celltype_labels)
+      
+#df$labels <- forcats::fct_relevel(df$labels, names(celltype_labels))
+ggplot(
+  df,
+  aes(x = group.by, y= expression, fill = transcript)) +
+   #stat_summary(fun = "mean", geom = "col") +
+  geom_col(position="fill") +
+  theme_minimal() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(
+          angle=45, hjust = 1, vjust = 1.2, size=20),
+        axis.title.y = element_blank(),
+        axis.text.y = element_text(
+          size=20),legend.position = "none") +
+  #labs(title = paste("Mean expression by", group.by, "-", gene_symbol), subtitle = "data scaled by library size then ln #transformed") +
+  NULL
+
+#return(list(plot = p, data = data))
+
+```
+#output Plot
+```{r}
+ggsave("../Plot_outputs/112320_7seq_CellType_res0-4_RXRG_Iso_ST_stackBar_LEG.png")
+```
+

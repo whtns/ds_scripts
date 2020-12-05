@@ -1,0 +1,50 @@
+---
+title: "Untitled"
+author: "dshayler"
+date: "9/15/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# load packages
+
+```{r}
+library(tidyverse)
+library(fs)
+```   
+
+#input transcript datatable
+```{r}
+data=read_csv("/home/dshayler/src/112320_7seq_final_NRL_isoform_av_count_stackGraph.csv", col_names = TRUE)
+
+```
+
+#produce bar plot from input from shiny app
+```{r}
+
+group_order <- c("RPC/MG", "PRP", "LM", "S", "ER", "LR")
+data$group.by <- factor(data$group.by, levels = group_order)
+group.by= data$group.by
+ggplot(
+  data,
+  aes(x = group.by, y= expression, fill = transcript)) +
+  #stat_summary(fun = "mean", geom = "col") +
+  geom_col(position="fill") +
+  theme_minimal() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(
+          angle=45, hjust = 1, vjust = 1, size=12)) +
+  #labs(title = paste("Mean expression by", group.by, "-", gene_symbol), subtitle = "data scaled by library size then ln #transformed") +
+  NULL
+
+#return(list(plot = p, data = data))
+
+```
+#output Plot
+```{r, eval = FALSE}
+ggsave("../Plot_outputs/112320_7seq_res0-4_NRL_coding_stack_standard.png")
+```
+

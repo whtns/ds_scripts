@@ -1,0 +1,66 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(tidyverse)
+library(seuratTools)
+library(scales)
+```
+
+#read in rds file of counts
+```{r}
+dex<-readRDS("~/src/raw_counts_subset.rds")
+#relabel PR/EC to PRP
+dex$Abbrev_Groups[dex$Abbrev_Groups=="PR/EC"]<-"PRP"
+```
+
+#read in seurat object 
+```{r}
+Seu <- readRDS("~/single_cell_projects/integrated_projects/7-seq_050120/output/seurat/Final_dataset_duplicate_070320.rds")
+```
+
+#Remove unwanted columns and cast columns of cell/exon to rows
+```{r}
+to.keep <- c("sample_id","exon_id","Abbrev_Groups","counts")
+dex<-dex[,which(colnames(dex)%in% to.keep)]
+dex2<-reshape2::dcast(dex,sample_id+Abbrev_Groups~exon_id,value.var = "counts")
+
+```
+#exon ratio column
+```{r}
+dex2[,'7-11_Ratio']=dex2[,'ENSG00000129535:E007']/dex2[,'ENSG00000129535:E011']
+#dex2$`7-11_Ratio`<-as.factor(dex2$`7-11_Ratio`)
+#make.true.NA <- function(x) if(is.numeric(x)||is.factor(x)){
+                                 # is.na(x) <- x%in% c(NaN, Inf); x} else {
+                                 # x}
+#dex2 <- lapply(dex2, make.true.NA)
+
+```
+
+#Run script
+```{r}
+group_order <- c("RPC/MG", "PRP", "LM", "S", "ER", "LR")
+groups<-factor(dex2$Abbrev_Groups, levels=group_order)
+ratio<-dex2$`7-11_Ratio`
+mypal <- c("RPC/MG"="#B385FF", "PRP"="#00BA38", "LM"="#F8766D", "S"="#F564E3","ER"="#B79F00", "LR"="#619CFF")
+vln_plot <- ggplot(dex2, aes(x=groups, y=ratio, fill=groups)) +
+  geom_violin(trim=FALSE)+
+  scale_fill_manual(values=mypal)+
+  scale_y_continuous(trans='log10',labels=comma)+
+  geom_boxplot(width=0.2)+
+   theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(
+        size=18),
+        axis.title.y = element_blank(),
+        axis.text.y = element_text(
+          size=18),legend.position = "none")
+
+vln_plot
+```
+#export plot
+```{r}
+ggsave("~/Plot_outputs/111320_7seq-exonratio_7-11_violin.pdf",vln_plot,width=10, height=7, units = "in" )
+```
+
+()

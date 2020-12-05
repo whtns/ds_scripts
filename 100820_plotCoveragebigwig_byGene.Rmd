@@ -1,0 +1,129 @@
+---
+title: "Untitled"
+author: "dshayler"
+date: "10/8/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# load packages
+
+```{r}
+
+library(tidyverse)
+```   
+
+#load bigwig
+```{r}
+load_bigwigs <- function(seu, proj_dir){
+
+  bigwig_dir <- fs::path(proj_dir, "output", "HISAT2bigwig")
+
+  if(!dir.exists(bigwig_dir)) stop("Sample coverage files (.bw) do not exist in the selected project")
+
+  bigwig_tbl <-
+    bigwig_dir %>%
+    fs::dir_ls(glob = "*.bw", recurse = TRUE) %>%
+    purrr::set_names(stringr::str_remove(fs::path_file(.), "_Aligned.sortedByCoord.out.bw")) %>%
+    tibble::enframe("sample_id", "bigWig")
+
+  if(!all(colnames(seu) %in% bigwig_tbl$sample_id)) stop("Sample coverage files (.bw) do not match samples in seurat object (check file names)")
+
+  return(bigwig_tbl)
+
+}
+```
+
+#plot bigwig coverage for genes  of interest by variable
+```{r}
+lot_gene_coverage_by_var <- function(genes_of_interest = "RXRG",
+                                      cell_metadata,
+                                      bigwig_tbl,
+                                      var_of_interest = NULL,
+                                      values_of_interest = NULL,
+                                      edb = EnsDb.Hsapiens.v86::EnsDb.Hsapiens.v86,
+                                      heights = c(3,1),
+                                      scale_y = "absolute",
+                                     fill_palette = NULL,
+                                      ...) {
+
+  cell_metadata["sample_id"] <- NULL
+
+  new_track_data <-
+    cell_metadata %>%
+    tibble::rownames_to_column("sample_id") %>%
+    dplyr::select(sample_id,
+                  condition = {{var_of_interest}},
+                  track_id = {{var_of_interest}},
+                  colour_group = {{var_of_interest}},
+                  everything()) %>%
+    dplyr::mutate(scaling_factor = 1, condition = as.factor(condition), colour_group = as.factor(colour_group)) %>%
+    dplyr::left_join(bigwig_tbl, by = "sample_id") %>%
+    identity()
+
+  if (!is.null(values_of_interest)){
+    new_track_data <-
+      new_track_data %>%
+      dplyr::filter(condition %in% values_of_interest)
+  }
+  
+  fill_palette <- fill_palette %||% scales::hue_pal()(length(levels(new_track_data$colour_group)))
+
+  coverage_plot_list <- wiggleplotr::plotCoverageFromEnsembldb(ensembldb = edb,
+                            gene_names = genes_of_interest,
+                            track_data = new_track_data,
+                            heights = heights,
+                            alpha = 0.5,
+                            transcript_label=FALSE,
+                            fill_palette = fill_palette,
+                            return_subplots_list = TRUE,
+                            ...)
+  
+  if(scale_y == "log10"){
+    coverage_plot_list$coverage_plot <-
+      coverage_plot_list$coverage_plot +
+      scale_y_continuous(trans = scales::pseudo_log_trans(base = 10), breaks = 10^(0:4)) +
+      NULL
+  }
+
+  coverage_plot = patchwork::wrap_plots(coverage_plot_list, heights = heights, ncol = 1)
+
+  return(coverage_plot)
+
+}
+
+```
+#load bigwig and run
+```{r}
+Seu <- readRDS("~/single_cell_projects/integrated_projects/7-seq_050120/output/seurat/Final_dataset_duplicate_070320.rds")
+table<-load_bigwigs(Seu,"~/single_cell_projects/integrated_projects/7-seq_050120")
+project<-"~/single_cell_projects/integrated_projects/7-seq_050120"
+metaD<-Seu$gene@meta.data
+
+#group_order <- c("RPC/Muller Glia", "PR Precursors/Early Maturing Cones", "Maturing LM Cones", "S Cones", "Early Maturing Rods", "Late Maturing Rods")
+group_order <- c("RPC/MG", "PRP", "LM", "S", "ER", "LR")
+
+metaD$Abbrev_Groups <- factor(metaD$Abbrev_Groups, levels = group_order)
+
+# debug(lot_gene_coverage_by_var)
+
+mypal <- c("#B385FF", "#00BA38", "#F8766D", "#F564E3","#B79F00", "#619CFF")
+
+coverage_plot <- lot_gene_coverage_by_var(genes_of_interest = "THRB",metaD,table,var_of_interest = "group_names_0.4", scale_y="log10", fill_palette = mypal)
+
+coverage_plot
+```
+
+```{r}
+
+ggsave("/home/dshayler/Plot_outputs/111720_Coverage_NRL_cellType_Log_nolabel.pdf", coverage_plot, width = 20, height = 15)
+
+
+# pdf("~/Plot_outputs/100920_Coverage_NRL_cellType.pdf")
+# coverage_plot
+# dev.off()
+```
+

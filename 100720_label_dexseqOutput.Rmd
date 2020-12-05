@@ -1,0 +1,59 @@
+---
+title: "label DEXseq"
+author: "dshayler"
+date: "10/7/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#library
+```{r}
+library(tidyverse)
+library(seuratTools)
+```
+
+
+#inport Seurat object
+```{r}
+Seu <- readRDS("~/single_cell_projects/integrated_projects/7-seq_050120/output/seurat/Final_dataset_duplicate_070320.rds")
+```
+
+#inport DEXseq table. Modified cell columns by hand to all contain underscores
+```{r}
+dex <- read.csv("~/src/100720_dexseq_results_group_names_0.4.csv", check.names=FALSE, header=TRUE)
+```
+
+#pull desired metadata values and cell list
+```{r}
+Seu_grp<-Seu$gene$group_names_0.4
+```
+
+#modify pulled seurat list to replace all spacing with _
+```{r}
+names2<-gsub("-","_",names(Seu_grp))
+Seu_grp<-setNames(Seu_grp,names2)
+```
+
+#Find match from Seu list to Dex col name and then append to bottom of column
+```{r}
+dex<-add_row(dex,)
+for (i in names(Seu_grp)){
+  if (!is.na(match(names(Seu_grp[i]),colnames(dex)))){
+    dex[17,i]<-Seu_grp[[i]]
+  }
+}
+```
+
+#output table
+```{r}
+write.csv(dex,file="~/src/100720_DEXseq_cellGrps.csv")
+```
+
+#transpose and write
+```{r}
+dex2<-t(dex)
+write.csv(dex2,file="~/src/100720_DEXseq_cellGrpsTransp.csv")
+```
+
